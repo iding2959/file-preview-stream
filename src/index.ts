@@ -183,6 +183,9 @@ export {
 	defaultMimeOf,
 } from "./core/mime";
 export { registerAdapter } from "./core/adapter";
+// 可选依赖注入：打包环境（Vite/Rollup/webpack）无法静态解析裸 import 时的显式出口
+export { configureDependencies, setDependencyLoader, SUPPORTED_OPTIONAL_DEPS } from "./core/optional";
+export type { DependencyLoader, DependencyOverrides } from "./core/optional";
 export type { Adapter, AdapterContext, AdapterOutput } from "./core/adapter";
 export { decodeText, looksLikeCsv, sniffContainer, formatBytes, escapeHtml } from "./core/binary";
 export type { ContainerFormat } from "./core/binary";

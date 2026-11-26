@@ -140,6 +140,36 @@ sql sh bash zsh fish bat cmd ps1 psm1 vbs asm s tf hcl dockerfile makefile
 cmake gradle lock
 ```
 
+## 可选依赖
+
+重解析器（`marked` / `xlsx` / `docx-preview` / `pptx-preview` / `dompurify`）是可选依赖。装好后需要告诉库它们在哪：
+
+```ts
+import * as XLSX from "xlsx";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
+import * as docxPreview from "docx-preview";
+import { configureDependencies } from "file-preview-stream";
+
+configureDependencies({ xlsx: XLSX, marked, dompurify: DOMPurify, docxPreview });
+```
+
+> `docxPreview` 传整个命名空间即可——适配器会依次取 `renderAsync` 和 `default.renderAsync`，两种打包形态都能命中。
+
+也可以自定义加载策略（比如走 CDN）：
+
+```ts
+import { setDependencyLoader } from "file-preview-stream";
+
+setDependencyLoader((name) =>
+	import(/* @vite-ignore */ `https://cdn.jsdelivr.net/npm/${name}/+esm`)
+);
+```
+
+**为什么不自动加载。** 字面量 `import("xlsx")` 能让打包器把依赖打进产物，但只要有一个可选依赖没装，**调用方的构建就会直接失败**（Vite/Rollup 报 `Failed to resolve import`）。变量形式不阻断构建，但浏览器无法解析裸说明符。两者不可兼得，库选择「绝不给调用方制造构建失败」，把加载权交给调用方。
+
+`postal-mime`、`unrar-js`、`node-unrar-js` 已随主包安装，不需注入。
+
 ## 归档与邮件
 
 ### archive：目录树 + 惰性解压
@@ -432,7 +462,9 @@ registerAdapter("docx", docxAdapter({ options: { breakPages: true } }));
 
 **为什么 pptx 自研而非直接用 pptx-preview。** 后者视觉还原好，但源码闭源、硬依赖 `echarts`（打包后数 MB），与「可整体替换内置实现」的设计前提冲突。所以默认走自研的 OOXML 文本大纲（零新依赖），想要高保真的人自己 `registerAdapter("pptx", pptxAdapter({ hiFi: true }))` 覆盖。
 
-**为什么可选依赖走 `loadOptional()` 而不是裸 `import()`。** 裸写 `await import("xlsx")` 在 Node 下没问题，但在 Vite 的 browser/jsdom 环境里，Vite 会在转译阶段静态解析这个字面量，模块不存在时直接抛 `Failed to resolve import`，`try/catch` 连执行机会都没有——「缺依赖优雅降级」这个承诺就失效了。实测 `/* @vite-ignore */` 也救不了（报错发生在它生效之前），只有变量间接（`import(name)`）能让 Vite 放弃静态解析。
+**为什么可选依赖默认不自动加载。** 「加载可选依赖」在四种环境里的最优解互相冲突：字面量 `import("xlsx")` 能被 Packer 打进产物，但缺包时会让**调用方的构建直接失败**；变量 `import(name)` 不会阻断构建，但浏览器没有 import map，裸说明符运行时解析不了。没有一种写法能同时满足「没装不阻断构建」和「装了自动可用」。
+
+库选择保证前者：**缺可选依赖绝不阻断调用方构建**，这是库最不该给用户添麻烦的地方。依赖通过 `configureDependencies()` 注入，或用 `setDependencyLoader()` 自定义加载策略。
 
 **为什么中文 CSV 走 GBK 回退。** 中文 Windows 导出的 CSV 绝大多数是 GBK，用 UTF-8 解不会报错，只会得到满屏 U+FFFD——用户看到乱码，而不是一个明确的失败信号。
 
@@ -446,7 +478,7 @@ registerAdapter("docx", docxAdapter({ options: { breakPages: true } }));
 - **eml**：`eml` 支持完整；`mht` / `mhtml` 走了同一适配器但格式差异较大，可能解析不全。
 - **ppt / 加密 PDF**：仍为 `unsupported`，请提供下载兜底。
 - **音视频**：`avi` / `mkv` 会返回 `playable: false` 与 `playableReason`（明确告知需转码），不再是黑屏无提示。Node 环境无 `canPlayType`，`playable` 为 `undefined`（无法判定），应按「尝试播放」处理。
-- **Vite / jsdom 等浏览器解析环境**：所有可选依赖都通过内部 `loadOptional()` 加载（变量间接的动态 import）。这是为了绕开 Vite 在**转译阶段**就把 `import("pkg")` 字面量解析掉的行为——模块缺失时会直接抛 `Failed to resolve import`，`try/catch` 无效。因此**不要**把内部实现改回字面量 import。
+- **可选依赖需显式注入**：库不会自动从 `node_modules` 解析可选依赖（见下方「可选依赖」章节）。不注入时相关类型会降级并给出 `reason`，不会崩。
 - 递归解析深度上限 3 层（zip 套 zip、eml 挂 eml 之类的构造会被截断并写进 `reason`）。
 - `tsv` 归为 `excel`（表格预览更有用）。若需要按纯文本查看，用 `registerKind("tsv", "text")` 覆盖。
 

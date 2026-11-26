@@ -61,3 +61,56 @@ describe("可选依赖加载方式", () => {
 		await expect(loadOptional("definitely-not-a-real-package-xyz")).resolves.toBeUndefined();
 	});
 });
+describe("可选依赖注入", () => {
+	it("configureDependencies 注入后优先使用注入值", async () => {
+		const { configureDependencies } = await import("../src/core/optional");
+		const { createPreview } = await import("../src");
+
+		// 造一个假 marked：能证明适配器用的是注入的那份，而不是磁盘上的真包
+		const fakeMarked = {
+			marked: { parse: (s: string) => `<marker>${s}</marker>` },
+		};
+		const undo = configureDependencies({ marked: fakeMarked });
+		try {
+			const r = await createPreview("# x", { name: "a.md" });
+			expect(r.html).toContain("<marker>");
+		} finally {
+			undo();
+		}
+	});
+
+	it("注销后恢复自动加载", async () => {
+		const { configureDependencies } = await import("../src/core/optional");
+		const undo = configureDependencies({ marked: { marked: { parse: () => "fake" } } });
+		undo();
+		// 注销后应回到磁盘上的真 marked（本项目 devDependency 已安装）
+		const { loadOptional } = await import("../src/core/optional");
+		const real = await loadOptional<{ marked?: unknown; parse?: unknown }>("marked");
+		expect(real).toBeTruthy();
+		expect(real?.marked ?? real?.parse).toBeTruthy();
+	});
+
+	it("setDependencyLoader 可接管加载", async () => {
+		const { setDependencyLoader, loadOptional } = await import("../src/core/optional");
+		setDependencyLoader((name) => (name === "xlsx" ? { fromLoader: true } : undefined));
+		try {
+			const v = await loadOptional<{ fromLoader?: boolean }>("xlsx");
+			expect(v?.fromLoader).toBe(true);
+		} finally {
+			setDependencyLoader(undefined);
+		}
+	});
+
+	it("加载器抛错时不影响其他依赖", async () => {
+		const { setDependencyLoader, loadOptional } = await import("../src/core/optional");
+		setDependencyLoader((name) => {
+			if (name === "xlsx") throw new Error("boom");
+			return undefined;
+		});
+		try {
+			await expect(loadOptional("definitely-not-real")).resolves.toBeUndefined();
+		} finally {
+			setDependencyLoader(undefined);
+		}
+	});
+});

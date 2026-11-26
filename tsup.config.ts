@@ -15,8 +15,22 @@ export default defineConfig({
 	sourcemap: true,
 	target: "es2022",
 	treeshake: true,
-	// 可选 peer 依赖保持 external，由调用方提供
-	// node-unrar-js 也必须是 external：它用相对路径定位包内 wasm，
-	// 一旦被内联进 chunk，__dirname 变成我方 dist 目录，wasm 就找不到了
-	external: ["docx-preview", "dompurify", "marked", "xlsx", "node-unrar-js", /^node-unrar-js\//],
+	// 可选依赖一律 external：它们由调用方提供，且列表里包含未安装的包
+	// （如 pptx-preview），不标 external 会让 esbuild 在构建期解析失败。
+	//
+	// 为什么要保持"字面量 import"而不是变量间接：
+	// 变量形式在产物里会变成运行时 import("xlsx")，浏览器没有 import map，
+	// 裸说明符无法解析；字面量才能让业务方的打包器把它们一起打进去。
+	external: [
+		"docx-preview",
+		"dompurify",
+		"marked",
+		"xlsx",
+		"pptx-preview",
+		"postal-mime",
+		"unrar-js",
+		/^unrar-js\//,
+		"node-unrar-js",
+		/^node-unrar-js\//,
+	],
 });
