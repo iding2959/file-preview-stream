@@ -5,6 +5,7 @@
  * 这两类文件在旧实现下要么整本预览失败，要么渲染出畸形 HTML。
  */
 import { beforeAll, describe, expect, it } from "vitest";
+import { JSDOM } from "jsdom";
 
 type XlsxModule = typeof import("xlsx");
 
@@ -12,7 +13,20 @@ let XLSX: XlsxModule;
 /** 有 xlsx 才跑：它是可选 peer 依赖 */
 let ready = false;
 
+/**
+ * 先把 DOM window 挂上再加载被测模块。
+ *
+ * 净化器缺失时库会整条降级（不交未净化 HTML），所以想验证表格内容就必须
+ * 提供 window —— 这也正是真实浏览器里的条件。dompurify 在模块求值期绑定
+ * document，顺序不能反。
+ */
 beforeAll(async () => {
+	const dom = new JSDOM("");
+	const g = globalThis as unknown as { window?: unknown; document?: unknown };
+	if (!g.window) {
+		g.window = dom.window;
+		g.document = dom.window.document;
+	}
 	try {
 		XLSX = await import("xlsx");
 		ready = true;

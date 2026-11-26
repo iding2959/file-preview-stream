@@ -66,14 +66,19 @@ describe("可选依赖注入", () => {
 		const { configureDependencies } = await import("../src/core/optional");
 		const { createPreview } = await import("../src");
 
-		// 造一个假 marked：能证明适配器用的是注入的那份，而不是磁盘上的真包
+		// 造假的 marked + dompurify：两个都注入，才能在不依赖 DOM window 的环境里
+		// 走到产出 HTML 这一步，从而证明适配器用的是注入的那份而非磁盘上的真包
 		const fakeMarked = {
 			marked: { parse: (s: string) => `<marker>${s}</marker>` },
 		};
-		const undo = configureDependencies({ marked: fakeMarked });
+		const fakePurify = {
+			sanitize: (html: string) => html,
+			default: { sanitize: (html: string) => html },
+		};
+		const undo = configureDependencies({ marked: fakeMarked, dompurify: fakePurify });
 		try {
 			const r = await createPreview("# x", { name: "a.md" });
-			expect(r.html).toContain("<marker>");
+			expect(String(r.html)).toContain("<marker>");
 		} finally {
 			undo();
 		}

@@ -1,6 +1,7 @@
 import type { Adapter } from "../core/adapter";
 import type { PreviewResult } from "../types";
 import { loadOptional } from "../core/optional";
+import { missingDependencyReason } from "../core/adapter";
 
 interface DomPurifyModule {
 	default?: { sanitize: (html: string, opts?: Record<string, unknown>) => string };
@@ -60,8 +61,10 @@ export const htmlAdapter =
 
 		const purifyMod = await loadOptional<DomPurifyModule>("dompurify");
 		const sanitize = purifyMod?.default?.sanitize ?? purifyMod?.sanitize;
+		// 调用方明确要求净化却拿不到净化器：这是配置错误，不能静默退回未净化内容。
+		// 与「默认不净化」区分开——后者是知情选择，返回 unsafe: true 是正确的契约。
 		if (!sanitize) {
-			return { html: text, unsafe: true };
+			return { reason: missingDependencyReason("dompurify") };
 		}
 
 		// 保留样式与表格结构：邮件正文的排版几乎全靠内联 style

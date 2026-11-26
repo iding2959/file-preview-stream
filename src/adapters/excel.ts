@@ -262,13 +262,10 @@ export const excelAdapter =
 
 		const sanitize = await resolveSanitizer();
 		if (!sanitize) {
-			// 分不清「没装」与「装了但无 window」会误导调用方：
-			// Node 侧缺 window 是环境事实，不该让用户去 npm i 一个已经装好的包
-			return {
-				html: raw,
-				unsafe: true,
-				reason: "未净化：当前环境没有 DOM window，无法运行 DOMPurify。浏览器端会自动净化",
-			};
+			// 净化器不可用是环境配置错误，不是「内容可信」。
+			// 必须整条降级：一旦返回 html，主流程会保留 kind 为 excel，
+			// 调用方拿去做 dangerouslySetInnerHTML 就直接是 XSS 面。
+			return { reason: missingDependencyReason("dompurify") };
 		}
 
 		return { html: sanitize(raw), unsafe: false };

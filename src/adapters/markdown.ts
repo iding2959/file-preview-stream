@@ -58,9 +58,12 @@ export const markdownAdapter =
 		const purifyMod = await loadOptional<DomPurifyModule>("dompurify");
 		const sanitize = purifyMod ? pickSanitize(purifyMod) : undefined;
 
-		// DOMPurify 在 Node 侧需要 jsdom window，拿不到 sanitize 时同样降级并标记
+		// 拿不到净化器 = 环境配置错误，不是「内容不可信」。
+		// 此时绝不能把未净化的 HTML 当正常结果交出去：调用方常用
+		// dangerouslySetInnerHTML 直接插入，且不会检查 unsafe。
+		// 不返回 html 字段，主流程才会把 kind 降级（返回 html 会保留 kind）。
 		if (!sanitize) {
-			return { html: raw, unsafe: true, reason: missingDependencyReason("dompurify") };
+			return { reason: missingDependencyReason("dompurify") };
 		}
 
 		return { html: sanitize(raw), unsafe: false };

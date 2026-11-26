@@ -73,9 +73,15 @@ describe("zip 归档预览", () => {
 		const r = await createPreview(fixture("simple.zip"), { name: "simple.zip" });
 		const entry = r.entries!.find((e) => e.path === "docs/说明.md")!;
 		const sub = await entry.preview();
-		expect(sub.kind).toBe("markdown");
+		// 文件名透传是稳定契约
 		expect(sub.name).toBe("docs/说明.md");
-		expect(sub.text ?? sub.html).toBeTruthy();
+		// kind 取决于净化器是否可用：无 window 时 markdown 会整条降级并不产出
+		// 任何内容（不交未净化 HTML），这是刻意行为，见 sanitizer-required.test.ts
+		if (sub.kind === "unsupported") {
+			expect(String(sub.reason)).toContain("dompurify");
+		} else {
+			expect(sub.text ?? sub.html).toBeTruthy();
+		}
 	});
 
 	it("清单 HTML 已转义条目名", async () => {

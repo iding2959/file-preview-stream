@@ -125,7 +125,16 @@ export interface PreviewResult {
 	text?: string;
 	/** HTML 字符串：markdown / excel / html / archive / eml / pptx 有值。可能未净化，见 unsafe */
 	html?: string;
-	/** html 未经过 DOMPurify 净化时为 true，调用方插入 DOM 前必须自行处理 */
+	/**
+	 * `html` 未经净化，插入 DOM 前必须由调用方自行处理（沙箱 iframe / 再净化）。
+	 *
+	 * 只在**知情选择**下为 true：
+	 * - `html` 适配器默认不净化（保留邮件/网页排版）
+	 * - 显式传 `skipSanitize: true`
+	 *
+	 * 净化器不可用**不会**产生 `unsafe: true` —— 那种情况整条结果会降级成
+	 * `unsupported` 且不带 `html`，避免调用方因漏检 `unsafe` 而插入未净化内容。
+	 */
 	unsafe?: boolean;
 	/**
 	 * 该内容含活动脚本风险，只能用在 <img> 之类不执行脚本的位置。

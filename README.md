@@ -325,6 +325,8 @@ if (res.kind === "html") {
 }
 ```
 
+若显式开启净化但环境拿不到 DOMPurify，结果会降级为 `unsupported` 且不含 `html`——不会退回未净化原文。
+
 需要净化后的片段可显式开启：
 
 ```ts
@@ -371,7 +373,7 @@ if (res.kind === "eml") {
 | `url` | blob URL，pdf/图片/svg/音视频 |
 | `text` | 纯文本 |
 | `html` | HTML 串，markdown/excel/html |
-| `unsafe` | `true` 表示 `html` 未经净化，插入 DOM 前必须自行处理 |
+| `unsafe` | `true` 表示 `html` 未经净化（仅限默认不净化的 html 与显式 `skipSanitize`）。净化器缺失时不会出现该标记，而是整条降级 |
 | `scriptable` | `true` 表示内容可执行脚本（svg），只能用在 `<img>` 这类不执行脚本的位置 |
 | `render` | `(container: HTMLElement) => Promise<void>`，docx / pptx(hiFi) |
 | `reason` | 降级/失败原因 |
@@ -452,7 +454,8 @@ registerAdapter("docx", docxAdapter({ options: { breakPages: true } }));
 
 **为什么降级时改 `kind`。** 调用方按 `kind` 选渲染器。缺 `marked` 时若仍报 `markdown`，调用方会把未解析的原文塞进 `innerHTML`，拿到的是乱排版而不是可读文本。
 
-**为什么默认净化 HTML。** 附件来源不可信，markdown 允许内联 HTML。DOMPurify 缺失时不静默放行，而是把 `unsafe: true` 标出来交给调用方决定。
+**为什么 DOMPurify 缺失时整条降级，而不是标 `unsafe: true` 放行。** `unsafe: true` 语义是「内容不可信，调用方自行处理」，但现实里大量调用方直接 `dangerouslySetInnerHTML={{ __html: html }}`，不会检查它。把「净化器拿不到」这种**环境配置错误**处理成静默降级，等于让库去赌调用方会不会检查——赌输就是 XSS。所以这种情况不返回 `html` 字段，`kind` 降级为 `unsupported` 并给出可执行的修复提示。
+（注意：只加 `reason` 不够——主流程里 `html` 存在时 `kind` 不会降级，必须真正不产出 `html`。）
 
 **为什么 archive 条目给的是 `preview()` 函数而不是现成结果。** 一个 zip 可能含几千个文件，全部预先解析既慢又耗内存，而用户通常只看其中一两个。惰性化把成本压到「真正点开那一刻」。
 
@@ -471,7 +474,7 @@ registerAdapter("docx", docxAdapter({ options: { breakPages: true } }));
 ## 已知限制
 
 - 预览纯在浏览器侧完成。Node 环境是否支持 `URL.createObjectURL` 取决于运行时版本：Node 20 及以下没有，pdf/图片/音视频分支会返回 `reason` 而非 `url`；Node 24 起已内置（产出 `blob:nodedata:` 协议）。
-- DOMPurify 在 Node 侧需要 jsdom 提供 `window`，无 window 时会标记 `unsafe`。
+- DOMPurify 在 Node 侧需要 jsdom 提供 `window`。无 window 时无法净化，markdown/excel（以及显式 `sanitize: true` 的 html）会整条降级为 `unsupported` 并给出原因——**不会**返回未净化的 HTML。想拿到净化结果请在浏览器侧使用，或注入一个可用的净化器。
 - **pptx**：默认是文本大纲（逐页文字 + 内嵌图片 + 备注），不还原版式、动画、图表。旧版 `.ppt` 二进制格式不支持。需要视觉还原请装 `pptx-preview` 并注册 `pptxAdapter({ hiFi: true })`。
 - **archive**：zip 完整支持（解压上限 256MB / 2000 条 / 单条 64MB，超出会截断并写进 `reason`）。RAR4 开箱可解；**RAR5 需要可选依赖 `node-unrar-js`**，未装时返回空清单 + 明确原因。`7z` / `tar` / `gz` / `bz2` / `xz` 仅识别为 `archive`，暂不解包。加密条目不解压。
 - **RAR5 浏览器加载**：Node 侧自动定位包内 `unrar.wasm`；浏览器必须 `configureRar5Wasm(arrayBuffer)` 显式注入，未注入时按「后端不可用」降级。
