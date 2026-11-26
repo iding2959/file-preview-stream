@@ -1,6 +1,6 @@
 {
   "name": "file-preview-stream",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Framework-agnostic file preview core: detect type from a Blob/stream and produce renderable output (blob URL, text, HTML skeleton).",
   "keywords": [
     "file-preview",
@@ -65,6 +65,16 @@
       "require": {
         "types": "./dist/adapters/docx.d.cts",
         "default": "./dist/adapters/docx.cjs"
+      }
+    },
+    "./adapters/html": {
+      "import": {
+        "types": "./dist/adapters/html.d.ts",
+        "default": "./dist/adapters/html.js"
+      },
+      "require": {
+        "types": "./dist/adapters/html.d.cts",
+        "default": "./dist/adapters/html.cjs"
       }
     },
     "./package.json": "./package.json"

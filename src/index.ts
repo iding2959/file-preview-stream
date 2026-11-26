@@ -6,6 +6,7 @@ import { nativeAdapter, releaseUrl, textAdapter, unsupportedAdapter } from "./ad
 import { markdownAdapter } from "./adapters/markdown";
 import { excelAdapter } from "./adapters/excel";
 import { docxAdapter } from "./adapters/docx";
+import { svgAdapter, htmlAdapter } from "./adapters/html";
 import type { PreviewInput, PreviewKind, PreviewOptions, PreviewResult } from "./types";
 
 /**
@@ -15,12 +16,15 @@ import type { PreviewInput, PreviewKind, PreviewOptions, PreviewResult } from ".
 const installDefaults = (): void => {
 	registerAdapter("pdf", nativeAdapter);
 	registerAdapter("image", nativeAdapter);
+	// svg 走独立适配器：它可执行脚本，渲染约束与位图不同
+	registerAdapter("svg", svgAdapter);
 	registerAdapter("video", nativeAdapter);
 	registerAdapter("audio", nativeAdapter);
 	registerAdapter("text", textAdapter);
 	registerAdapter("markdown", markdownAdapter());
 	registerAdapter("excel", excelAdapter());
 	registerAdapter("docx", docxAdapter());
+	registerAdapter("html", htmlAdapter());
 	registerAdapter("unsupported", unsupportedAdapter);
 };
 
@@ -121,9 +125,20 @@ export const createPreview = async (
 	return result;
 };
 
-export { detectKind, extOf, kindFromMime, registerKind, supportedExts, defaultMimeOf } from "./core/mime";
+export {
+	detectKind,
+	extOf,
+	basenameOf,
+	kindFromMime,
+	registerKind,
+	supportedExts,
+	supportedBasenames,
+	defaultMimeOf,
+} from "./core/mime";
 export { registerAdapter } from "./core/adapter";
 export type { Adapter, AdapterContext, AdapterOutput } from "./core/adapter";
 export { decodeText, looksLikeCsv } from "./core/binary";
 export { DOCX_OPTIONS } from "./adapters/docx";
+export { svgAdapter, htmlAdapter } from "./adapters/html";
+export type { HtmlAdapterOptions } from "./adapters/html";
 export type { PreviewInput, PreviewKind, PreviewOptions, PreviewResult } from "./types";

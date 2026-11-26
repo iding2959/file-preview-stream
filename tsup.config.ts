@@ -7,6 +7,7 @@ export default defineConfig({
 		"adapters/markdown": "src/adapters/markdown.ts",
 		"adapters/excel": "src/adapters/excel.ts",
 		"adapters/docx": "src/adapters/docx.ts",
+		"adapters/html": "src/adapters/html.ts",
 	},
 	format: ["esm", "cjs"],
 	dts: true,

@@ -71,7 +71,9 @@ describe("detectKind", () => {
 
 	it("覆盖常见附件后缀", () => {
 		expect(detectKind("a.xls")).toBe("excel");
-		expect(detectKind("a.svg")).toBe("image");
+		// svg 已独立成 kind：可内嵌脚本，渲染约束与位图不同
+		expect(detectKind("a.svg")).toBe("svg");
+		expect(detectKind("a.png")).toBe("image");
 		expect(detectKind("a.log")).toBe("text");
 		expect(detectKind("a.json")).toBe("text");
 		expect(detectKind("a.m4a")).toBe("audio");

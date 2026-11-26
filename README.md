@@ -34,12 +34,19 @@ switch (res.kind) {
 	case "audio":
 		el.src = res.url;          // 浏览器原生可渲染
 		break;
+	case "svg":
+		img.src = res.url;         // 只能给 <img>：res.scriptable 为 true
+		break;
 	case "text":
 		el.textContent = res.text; // 纯文本
 		break;
 	case "markdown":
 	case "excel":
 		el.innerHTML = res.html;   // 已净化，unsafe 为 false
+		break;
+	case "html":
+		iframe.srcdoc = res.html;  // res.unsafe 为 true，必须走沙箱
+		iframe.setAttribute("sandbox", "");
 		break;
 	case "docx":
 		await res.render(container); // docx 需要真实 DOM
@@ -74,17 +81,80 @@ useEffect(() => {
 
 ## 支持的格式
 
+共 **152 个扩展名 + 28 个无扩展名固定文件名**。
+
 | kind | 扩展名 | 产出 | 可选依赖 |
 |---|---|---|---|
 | `pdf` | pdf | `url` | — |
-| `image` | jpg jpeg png gif webp bmp ico svg avif tif tiff | `url` | — |
-| `video` | mp4 webm mov m4v ogv | `url` | — |
-| `audio` | mp3 wav ogg m4a flac aac | `url` | — |
+| `image` | jpg jpeg jpe jfif pjpeg pjp png apng gif webp bmp ico cur avif tif tiff | `url` | — |
+| `svg` | svg svgz | `url` + **`scriptable: true`** | — |
+| `video` | mp4 m4v webm ogv mov qt mpg mpeg mpe m2v avi 3gp 3g2 mkv | `url` | — |
+| `audio` | mp3 wav ogg oga opus m4a weba flac aac wma mid midi amr | `url` | — |
 | `docx` | docx | `render(container)` | `docx-preview` |
-| `excel` | xlsx xls csv | `html` | `xlsx`、`dompurify` |
-| `markdown` | md markdown | `html` | `marked`、`dompurify` |
-| `text` | txt log json xml yaml yml ini conf html htm css js ts py java go rs sql sh | `text` | — |
+| `excel` | xlsx xlsm xls csv tsv | `html` | `xlsx`、`dompurify` |
+| `markdown` | md markdown mdown mkd mkdn mdx | `html` | `marked`、`dompurify` |
+| `html` | html htm xhtml | `html` + **`unsafe: true`** | — |
+| `text` | 91 种源码/配置/日志格式，见下方 | `text` | — |
 | `unsupported` | 其余 | `reason` | — |
+
+**固定文件名**（无扩展名也能识别为 `text`）：
+
+```
+Dockerfile  Makefile  Gemfile  Rakefile  Procfile  Vagrantfile  Jenkinsfile
+CMakeLists.txt  LICENSE  LICENCE  README  CHANGELOG  AUTHORS  CONTRIBUTORS
+NOTICE  COPYING  TODO  .gitignore  .gitattributes  .gitmodules  .dockerignore
+.npmignore  .npmrc  .editorconfig  .env  .babelrc  .eslintrc  .prettierrc
+```
+
+**`text` 覆盖的 91 种后缀**：
+
+```
+txt text log json jsonc json5 xml xsl xsd yaml yml toml ini cfg conf properties
+env diff patch css scss sass less js mjs cjs jsx ts mts cts tsx vue svelte
+py pyi ipynb java kt kts scala groovy go rs c h cc cpp cxx hpp cs m mm swift
+rb php lua pl r dart ex exs erl hs clj scm lisp rst tex bib proto graphql gql
+sql sh bash zsh fish bat cmd ps1 psm1 vbs asm s tf hcl dockerfile makefile
+cmake gradle lock
+```
+
+## 安全标记
+
+两个 kind 带额外安全语义，**不处理会出事**：
+
+### `svg` → `scriptable: true`
+
+SVG 是 XML，可内嵌 `<script>` 与 `onload`。它的 blob URL：
+
+- ✅ 放进 `<img src>` —— **安全**
+- ❌ 放进 `<iframe>` / `<object>` / `<embed>` —— **执行脚本**
+- ❌ 塞进 `innerHTML` —— **执行脚本**
+
+```ts
+if (res.kind === "svg") {
+	img.src = res.url;              // 只能这样
+	// 不要：iframe.src = res.url
+	// 不要：el.innerHTML = `<img src="${res.url}">` 之外的任何注入
+}
+```
+
+### `html` → `unsafe: true`
+
+默认**不净化**，返回原文。因为 HTML 邮件/网页附件依赖 `<style>`、布局、表单，严格净化会把排版整个毁掉。
+
+```ts
+if (res.kind === "html") {
+	// 推荐：沙箱 iframe，禁止脚本执行
+	iframe.srcdoc = res.html;
+	iframe.setAttribute("sandbox", "");     // 空 sandbox = 全禁
+}
+```
+
+需要净化后的片段可显式开启：
+
+```ts
+import { htmlAdapter } from "file-preview-stream/adapters/html";
+registerAdapter("html", htmlAdapter({ sanitize: true }));   // 需装 dompurify
+```
 
 ## API
 
@@ -104,10 +174,11 @@ useEffect(() => {
 |---|---|
 | `kind` | 实际呈现类型（降级后会反映真实形式） |
 | `mime` / `name` / `size` | 归一化后的元信息 |
-| `url` | blob URL，pdf/图片/音视频 |
+| `url` | blob URL，pdf/图片/svg/音视频 |
 | `text` | 纯文本 |
-| `html` | HTML 串，markdown/excel |
+| `html` | HTML 串，markdown/excel/html |
 | `unsafe` | `true` 表示 `html` 未经净化，插入 DOM 前必须自行处理 |
+| `scriptable` | `true` 表示内容可执行脚本（svg），只能用在 `<img>` 这类不执行脚本的位置 |
 | `render` | `(container: HTMLElement) => Promise<void>`，docx |
 | `reason` | 降级/失败原因 |
 | `revoke` | 释放 `url`，调用方必须在不使用时调用 |
@@ -115,15 +186,24 @@ useEffect(() => {
 ### 类型识别
 
 ```ts
-import { detectKind, extOf, kindFromMime, supportedExts } from "file-preview-stream";
+import {
+	detectKind, extOf, basenameOf, kindFromMime,
+	supportedExts, supportedBasenames,
+} from "file-preview-stream";
 
 detectKind("a.pdf", "");                 // "pdf"
+detectKind("Dockerfile");                // "text"（固定文件名）
 extOf("/tmp/a.tar.gz");                  // "gz"
-kindFromMime("video/mp4");               // "video"
-supportedExts();                         // 全部支持的扩展名
+basenameOf("/app/Makefile");             // "makefile"
+kindFromMime("image/svg+xml");           // "svg"
+supportedExts();                         // 152 个扩展名
+supportedBasenames();                    // 28 个固定文件名
 ```
 
-识别优先级：**显式 `kind` > 扩展名 > MIME**。扩展名优先是因为很多服务器把附件 Content-Type 一律写成 `application/octet-stream`，扩展名更可信。
+识别优先级：**显式 `kind` > 固定文件名 > 扩展名 > MIME**。
+
+- 固定文件名排在扩展名前，才能让 `Makefile` 这类无后缀文件命中。
+- 扩展名优先于 MIME，因为很多服务器把附件 Content-Type 一律写成 `application/octet-stream`，扩展名更可信。
 
 ### 扩展新格式
 
@@ -173,7 +253,9 @@ registerAdapter("docx", docxAdapter({ options: { breakPages: true } }));
 
 - 预览纯在浏览器侧完成。Node 环境是否支持 `URL.createObjectURL` 取决于运行时版本：Node 20 及以下没有，pdf/图片/音视频分支会返回 `reason` 而非 `url`；Node 24 起已内置（产出 `blob:nodedata:` 协议）。
 - DOMPurify 在 Node 侧需要 jsdom 提供 `window`，无 window 时会标记 `unsafe`。
-- 不支持 pptx / zip / 加密 PDF。
+- 不支持 pptx / ppt / zip / rar / eml / 加密 PDF；这些会识别为 `unsupported`，请提供下载兜底。
+- `avi` / `mkv` / `wmv` 等已识别为 `video`，但浏览器原生不保证能播，实际可能黑屏；如遇此情况请降级为下载。
+- `tsv` 归为 `excel`（表格预览更有用）。若需要按纯文本查看，用 `registerKind("tsv", "text")` 覆盖。
 
 ## License
 

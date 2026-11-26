@@ -12,7 +12,7 @@ export interface AdapterContext {
 
 /** 适配器只返回结果的一部分，revoke 由主流程统一兜底 */
 export type AdapterOutput = Partial<
-	Pick<PreviewResult, "url" | "text" | "html" | "unsafe" | "render" | "reason">
+	Pick<PreviewResult, "url" | "text" | "html" | "unsafe" | "scriptable" | "render" | "reason">
 >;
 
 export type Adapter = (ctx: AdapterContext) => Promise<AdapterOutput> | AdapterOutput;
