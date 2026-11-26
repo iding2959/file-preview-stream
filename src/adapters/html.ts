@@ -1,5 +1,6 @@
 import type { Adapter } from "../core/adapter";
 import type { PreviewResult } from "../types";
+import { loadOptional } from "../core/optional";
 
 interface DomPurifyModule {
 	default?: { sanitize: (html: string, opts?: Record<string, unknown>) => string };
@@ -57,12 +58,7 @@ export const htmlAdapter =
 			return { html: text, unsafe: true };
 		}
 
-		let purifyMod: DomPurifyModule | undefined;
-		try {
-			purifyMod = (await import("dompurify")) as DomPurifyModule;
-		} catch {
-			purifyMod = undefined;
-		}
+		const purifyMod = await loadOptional<DomPurifyModule>("dompurify");
 		const sanitize = purifyMod?.default?.sanitize ?? purifyMod?.sanitize;
 		if (!sanitize) {
 			return { html: text, unsafe: true };

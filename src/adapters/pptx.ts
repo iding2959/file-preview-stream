@@ -2,6 +2,7 @@ import { unzipSync } from "fflate";
 import type { Adapter, AdapterContext } from "../core/adapter";
 import type { PptxSlide } from "../types";
 import { escapeHtml, sniffContainer } from "../core/binary";
+import { loadOptional } from "../core/optional";
 
 /** 解压总量上限，与 archive 同口径：pptx 也是 zip，同样存在膨胀风险 */
 const MAX_UNCOMPRESSED = 128 * 1024 * 1024;
@@ -36,12 +37,8 @@ export const pptxAdapter =
 
 /** 高保真渲染器只产出 render(container)，与 docx 同一种契约：DOM 由调用方持有 */
 const loadHiFi = async (ctx: AdapterContext): Promise<{ render: (c: HTMLElement) => Promise<void>; hiFi: boolean; slides: PptxSlide[] } | undefined> => {
-	let mod: PptxPreviewModule | undefined;
-	try {
-		mod = (await import("pptx-preview")) as PptxPreviewModule;
-	} catch {
-		return undefined;
-	}
+	const mod = await loadOptional<PptxPreviewModule>("pptx-preview");
+	if (!mod) return undefined;
 	const init = mod.init ?? mod.default?.init;
 	if (!init) return undefined;
 

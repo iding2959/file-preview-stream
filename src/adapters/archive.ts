@@ -3,6 +3,7 @@ import type { Adapter, AdapterContext } from "../core/adapter";
 import type { ArchiveEntry, ArchiveEntryKind, PreviewResult } from "../types";
 import { escapeHtml, formatBytes, sniffContainer } from "../core/binary";
 import { readRar5 as readRar5Fn } from "../core/rar5";
+import { loadOptional } from "../core/optional";
 
 /** 解压总量上限。zip bomb 是真实存在的攻击面：42KB 的 zip 可以膨胀到 4PB */
 const MAX_TOTAL_UNCOMPRESSED = 256 * 1024 * 1024;
@@ -230,10 +231,10 @@ const readRar4 = async (ctx: AdapterContext): Promise<ReturnType<typeof archiveR
 		// unrar-js 的包入口依赖 fs/child_process，浏览器不可用；
 		// 真正可移植的是它内部的 lib/Unrar.js（纯 Uint8Array + EventEmitter）。
 		// CJS 互操作下默认导出可能挂在 .default 上，两种形状都兼容。
-		const mod = (await import("unrar-js/lib/Unrar.js")) as unknown as
-			| { default?: (data: Uint8Array) => RarFileEntry[] }
-			| ((data: Uint8Array) => RarFileEntry[]);
-		const unrar = typeof mod === "function" ? mod : mod.default;
+		const mod = await loadOptional<
+			{ default?: (data: Uint8Array) => RarFileEntry[] } | ((data: Uint8Array) => RarFileEntry[])
+		>("unrar-js/lib/Unrar.js");
+		const unrar = typeof mod === "function" ? mod : mod?.default;
 		if (typeof unrar !== "function") throw new Error("unrar-js 解码器不可用");
 		files = unrar(ctx.bytes) ?? [];
 	} catch (err) {

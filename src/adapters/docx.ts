@@ -1,6 +1,7 @@
 import type { Adapter } from "../core/adapter";
 import { missingDependencyReason } from "../core/adapter";
 import type { PreviewResult } from "../types";
+import { loadOptional } from "../core/optional";
 
 interface DocxPreviewModule {
 	renderAsync?: (
@@ -36,12 +37,7 @@ export interface DocxAdapterOptions {
 export const docxAdapter =
 	(options: DocxAdapterOptions = {}): Adapter =>
 	async (ctx) => {
-		let mod: DocxPreviewModule | undefined;
-		try {
-			mod = (await import("docx-preview")) as DocxPreviewModule;
-		} catch {
-			mod = undefined;
-		}
+		const mod = await loadOptional<DocxPreviewModule>("docx-preview");
 		const renderAsync = mod?.renderAsync ?? mod?.default?.renderAsync;
 		if (!renderAsync) return { reason: missingDependencyReason("docx-preview") };
 

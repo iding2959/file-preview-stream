@@ -432,6 +432,8 @@ registerAdapter("docx", docxAdapter({ options: { breakPages: true } }));
 
 **为什么 pptx 自研而非直接用 pptx-preview。** 后者视觉还原好，但源码闭源、硬依赖 `echarts`（打包后数 MB），与「可整体替换内置实现」的设计前提冲突。所以默认走自研的 OOXML 文本大纲（零新依赖），想要高保真的人自己 `registerAdapter("pptx", pptxAdapter({ hiFi: true }))` 覆盖。
 
+**为什么可选依赖走 `loadOptional()` 而不是裸 `import()`。** 裸写 `await import("xlsx")` 在 Node 下没问题，但在 Vite 的 browser/jsdom 环境里，Vite 会在转译阶段静态解析这个字面量，模块不存在时直接抛 `Failed to resolve import`，`try/catch` 连执行机会都没有——「缺依赖优雅降级」这个承诺就失效了。实测 `/* @vite-ignore */` 也救不了（报错发生在它生效之前），只有变量间接（`import(name)`）能让 Vite 放弃静态解析。
+
 **为什么中文 CSV 走 GBK 回退。** 中文 Windows 导出的 CSV 绝大多数是 GBK，用 UTF-8 解不会报错，只会得到满屏 U+FFFD——用户看到乱码，而不是一个明确的失败信号。
 
 ## 已知限制
@@ -444,6 +446,7 @@ registerAdapter("docx", docxAdapter({ options: { breakPages: true } }));
 - **eml**：`eml` 支持完整；`mht` / `mhtml` 走了同一适配器但格式差异较大，可能解析不全。
 - **ppt / 加密 PDF**：仍为 `unsupported`，请提供下载兜底。
 - **音视频**：`avi` / `mkv` 会返回 `playable: false` 与 `playableReason`（明确告知需转码），不再是黑屏无提示。Node 环境无 `canPlayType`，`playable` 为 `undefined`（无法判定），应按「尝试播放」处理。
+- **Vite / jsdom 等浏览器解析环境**：所有可选依赖都通过内部 `loadOptional()` 加载（变量间接的动态 import）。这是为了绕开 Vite 在**转译阶段**就把 `import("pkg")` 字面量解析掉的行为——模块缺失时会直接抛 `Failed to resolve import`，`try/catch` 无效。因此**不要**把内部实现改回字面量 import。
 - 递归解析深度上限 3 层（zip 套 zip、eml 挂 eml 之类的构造会被截断并写进 `reason`）。
 - `tsv` 归为 `excel`（表格预览更有用）。若需要按纯文本查看，用 `registerKind("tsv", "text")` 覆盖。
 

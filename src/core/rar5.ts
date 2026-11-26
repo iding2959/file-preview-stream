@@ -1,4 +1,5 @@
 import { MIME_BY_CONTAINER } from "./binary";
+import { loadOptional } from "./optional";
 
 /**
  * 可选的 RAR5 解码后端（node-unrar-js：官方 unrar 编译成的 WASM）。
@@ -81,10 +82,11 @@ const loadModule = async (): Promise<unknown | undefined> => {
 			const wasmBinary = await loadWasmBinary();
 			if (!wasmBinary) return undefined;
 			// 包入口是 CJS 工厂；用深路径避免它的 iife 包被 ESM 误解析
-			const factoryMod = (await import("node-unrar-js/dist/js/unrar.js")) as unknown as
+			const factoryMod = await loadOptional<
 				| { default?: (opts: { wasmBinary: ArrayBuffer }) => Promise<unknown> }
-				| ((opts: { wasmBinary: ArrayBuffer }) => Promise<unknown>);
-			const factory = typeof factoryMod === "function" ? factoryMod : factoryMod.default;
+				| ((opts: { wasmBinary: ArrayBuffer }) => Promise<unknown>)
+			>("node-unrar-js/dist/js/unrar.js");
+			const factory = typeof factoryMod === "function" ? factoryMod : factoryMod?.default;
 			if (typeof factory !== "function") return undefined;
 			// 注入 wasmBinary 后，运行时走内存分支，不会 require("fs")
 			return await factory({ wasmBinary });
@@ -119,9 +121,11 @@ export const readRar5 = async (
 	const unrar = await loadModule();
 	if (!unrar) return undefined;
 
-	const { ExtractorData } = (await import("node-unrar-js/dist/js/ExtractorData.js")) as unknown as {
-		ExtractorData: ExtractorCtor;
-	};
+	const extractorMod = await loadOptional<{ ExtractorData: ExtractorCtor }>(
+		"node-unrar-js/dist/js/ExtractorData.js"
+	);
+	if (!extractorMod) return undefined;
+	const { ExtractorData } = extractorMod;
 	const data = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 	const ex = new ExtractorData(unrar, data);
 	// 运行时通过 Module.extractor 回调 JS 侧的读写实现，这一步不能省

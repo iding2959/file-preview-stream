@@ -115,14 +115,21 @@ describe("createPreview - 缺依赖降级", () => {
 });
 
 describe("createPreview - 其它缺依赖降级", () => {
-	it("docx/xlsx 缺依赖降级为 unsupported", async () => {
+	it("docx 缺依赖降级为 unsupported", async () => {
 		const docx = await createPreview(new Uint8Array([1]), { name: "a.docx" });
 		expect(docx.kind).toBe("unsupported");
 		expect(docx.reason).toContain("docx-preview");
+	});
 
-		const xlsx = await createPreview(new Uint8Array([1]), { name: "a.xlsx" });
+	it("xlsx 内容损坏时给出可读原因而非内部错误", async () => {
+		// xlsx 现在是 devDependency（excel 适配器有测试覆盖），这里验「坏文件」路径。
+		// 用截断的 zip 头：SheetJS 对纯文本会当成单格表格容错，只有真损坏才报错
+		const broken = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04]);
+		const xlsx = await createPreview(broken, { name: "a.xlsx" });
 		expect(xlsx.kind).toBe("unsupported");
-		expect(xlsx.reason).toContain("xlsx");
+		expect(xlsx.reason).toContain("无法解析该文件为表格");
+		// 不能把 Cannot read properties of undefined 这类内部错误直接抛给用户
+		expect(xlsx.reason ?? "").not.toMatch(/Cannot read/);
 	});
 });
 

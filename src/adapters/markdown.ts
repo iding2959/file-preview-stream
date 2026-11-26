@@ -2,6 +2,7 @@ import { decodeText } from "../core/binary";
 import type { Adapter } from "../core/adapter";
 import { missingDependencyReason } from "../core/adapter";
 import type { PreviewResult } from "../types";
+import { loadOptional } from "../core/optional";
 
 /** marked 的可选导出形状：CJS 互操作后可能挂在 default 上 */
 interface MarkedModule {
@@ -42,12 +43,7 @@ export const markdownAdapter =
 		const { text } = decodeText(ctx.bytes);
 		const { gfm = true, breaks = true, skipSanitize = false } = options;
 
-		let markedMod: MarkedModule | undefined;
-		try {
-			markedMod = (await import("marked")) as MarkedModule;
-		} catch {
-			markedMod = undefined;
-		}
+		const markedMod = await loadOptional<MarkedModule>("marked");
 		const parse = markedMod ? pickMarkedParse(markedMod) : undefined;
 
 		// marked 缺失时仍返回原文，让调用方至少能当纯文本展示
@@ -59,12 +55,7 @@ export const markdownAdapter =
 
 		if (skipSanitize) return { html: raw, unsafe: true };
 
-		let purifyMod: DomPurifyModule | undefined;
-		try {
-			purifyMod = (await import("dompurify")) as DomPurifyModule;
-		} catch {
-			purifyMod = undefined;
-		}
+		const purifyMod = await loadOptional<DomPurifyModule>("dompurify");
 		const sanitize = purifyMod ? pickSanitize(purifyMod) : undefined;
 
 		// DOMPurify 在 Node 侧需要 jsdom window，拿不到 sanitize 时同样降级并标记

@@ -1,6 +1,7 @@
 import type { Adapter } from "../core/adapter";
 import type { MailAddress, MailAttachment, PreviewResult } from "../types";
 import { escapeHtml, formatBytes } from "../core/binary";
+import { loadOptional } from "../core/optional";
 
 interface PostalAddress {
 	address?: string;
@@ -52,12 +53,9 @@ const toBytes = (content: PostalAttachment["content"]): Uint8Array => {
  * <iframe sandbox>，而不是在库里猜哪些标签该留。
  */
 export const emlAdapter: Adapter = async (ctx) => {
-	let mod: PostalMimeModule | undefined;
-	try {
-		mod = (await import("postal-mime")) as PostalMimeModule;
-	} catch {
-		mod = undefined;
-	}
+	// postal-mime 虽在 dependencies，仍走统一入口：
+	// Vite 的浏览器解析环境对字面量 import() 同样会在转译期硬报错
+	const mod = await loadOptional<PostalMimeModule>("postal-mime");
 	const Ctor = mod?.PostalMime ?? mod?.default;
 	if (!Ctor) {
 		return { reason: "预览 eml 需要依赖 postal-mime，例如: npm i postal-mime" };
