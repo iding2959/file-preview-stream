@@ -1,0 +1,63 @@
+name: Deploy to npm
+
+# 只在推送版本标签时发布，例如 v0.0.1 / v0.0.3。
+# 用 v* 而非 v0.0.* 是为了以后能自然支持 v0.1.0 这类版本，不必改 workflow。
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  # OIDC 发布凭据靠这个签名换取，缺了它会退回找 NPM_TOKEN 然后失败
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      # node 24 是 npm 官方推荐版本；package-manager-cache 必须关闭，
+      # 发布构建从不复用缓存，避免缓存污染导致的产物不可复现
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 版本一致性前置校验：tag 与 package.json 不一致是发布最常见的翻车点，
+      # 必须在耗时构建之前拦住，否则会推一个错版本到 registry 且无法删除
+      - name: Verify tag matches package.json version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} 与 package.json 版本 ${PKG_VERSION} 不一致"
+            exit 1
+          fi
+          echo "版本一致: ${PKG_VERSION}"
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      # build 放在 test 之后：产物由 prepublishOnly 再构建一次也无妨，
+      # 这里有显式产物便于失败时排查
+      - name: Build
+        run: npm run build
+
+      # OIDC trusted publishing：无需 NPM_TOKEN，npm CLI 自动识别 CI 环境并换取短期凭据。
+      # repository.url 已与 GitHub 仓库一致，provenance 会自动生成
+      - name: Publish to npm
+        run: npm publish --access public

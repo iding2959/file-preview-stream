@@ -1,6 +1,6 @@
 {
   "name": "file-preview-stream",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Framework-agnostic file preview core: detect type from a Blob/stream and produce renderable output (blob URL, text, HTML skeleton).",
   "keywords": [
     "file-preview",
