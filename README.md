@@ -171,7 +171,7 @@ registerAdapter("docx", docxAdapter({ options: { breakPages: true } }));
 
 ## 已知限制
 
-- 预览纯在浏览器侧完成；Node 环境没有 `URL.createObjectURL`，pdf/图片/音视频分支会返回 `reason` 而非 `url`。
+- 预览纯在浏览器侧完成。Node 环境是否支持 `URL.createObjectURL` 取决于运行时版本：Node 20 及以下没有，pdf/图片/音视频分支会返回 `reason` 而非 `url`；Node 24 起已内置（产出 `blob:nodedata:` 协议）。
 - DOMPurify 在 Node 侧需要 jsdom 提供 `window`，无 window 时会标记 `unsafe`。
 - 不支持 pptx / zip / 加密 PDF。
 
