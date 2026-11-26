@@ -65,7 +65,8 @@ describe("detectKind", () => {
 	});
 
 	it("都识别不出时为 unsupported", () => {
-		expect(detectKind("a.zip", "application/zip")).toBe("unsupported");
+		// zip 自 0.1.0 起归为 archive，这里换用真正无处理器的后缀做反例
+		expect(detectKind("a.psd", "application/x-unknown")).toBe("unsupported");
 		expect(detectKind("", "")).toBe("unsupported");
 	});
 

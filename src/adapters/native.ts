@@ -1,5 +1,6 @@
 import { decodeText, looksLikeCsv, toBlob } from "../core/binary";
 import { missingDependencyReason, type Adapter, type AdapterContext } from "../core/adapter";
+import { checkPlayability } from "../core/playability";
 import type { PreviewResult } from "../types";
 
 /** 生成 blob URL 的分支共用：Node 侧没有 createObjectURL，降级为无 url */
@@ -22,6 +23,20 @@ export const nativeAdapter: Adapter = async (ctx) => {
 	const url = await asBlobUrl(ctx);
 	if (!url) return { reason: noObjectUrlReason };
 	return { url };
+};
+
+/**
+ * 音视频处理：在 nativeAdapter 基础上加可播性判定。
+ *
+ * 为什么值得单列：`<video>` 播不了只会触发 error 事件，用户看到黑屏却不知道原因。
+ * 关键是 avi / mkv 这类「识别得出来但浏览器解不了」的容器在附件里极常见，
+ * 提前给出 playable + 原因，调用方就能直接显示「下载 / 转码」。
+ */
+export const mediaAdapter: Adapter = async (ctx) => {
+	const playability = checkPlayability(ctx.bytes, ctx.mime);
+	const url = await asBlobUrl(ctx);
+	if (!url) return { reason: noObjectUrlReason, ...playability };
+	return { url, ...playability };
 };
 
 /**

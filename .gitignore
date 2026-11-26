@@ -8,3 +8,5 @@ coverage/
 .env
 .env.*
 !.env.example
+# 规划工作记录（本地，不入库）
+.planning/

@@ -2,12 +2,23 @@ import { byteLengthOf, toBlob, toBytes } from "./core/binary";
 import { detectKind, defaultMimeOf, extOf } from "./core/mime";
 import type { AdapterContext, AdapterOutput } from "./core/adapter";
 import { getAdapter, registerAdapter } from "./core/adapter";
-import { nativeAdapter, releaseUrl, textAdapter, unsupportedAdapter } from "./adapters/native";
+import { mediaAdapter, nativeAdapter, releaseUrl, textAdapter, unsupportedAdapter } from "./adapters/native";
 import { markdownAdapter } from "./adapters/markdown";
 import { excelAdapter } from "./adapters/excel";
 import { docxAdapter } from "./adapters/docx";
+import { pptxAdapter } from "./adapters/pptx";
+import { archiveAdapter } from "./adapters/archive";
+import { emlAdapter } from "./adapters/eml";
 import { svgAdapter, htmlAdapter } from "./adapters/html";
 import type { PreviewInput, PreviewKind, PreviewOptions, PreviewResult } from "./types";
+
+/**
+ * 递归深度硬上限。
+ *
+ * archive / eml 会把部件重新喂回 createPreview，而 zip 套 zip、eml 里挂 eml
+ * 都是构造得出来的。没有上限时一次预览就能把调用方拖进无限递归。
+ */
+const MAX_DEPTH = 3;
 
 /**
  * 内置适配器注册集中在这里而非各适配器文件，是为了保证「导入主入口即完成装配」，
@@ -18,12 +29,16 @@ const installDefaults = (): void => {
 	registerAdapter("image", nativeAdapter);
 	// svg 走独立适配器：它可执行脚本，渲染约束与位图不同
 	registerAdapter("svg", svgAdapter);
-	registerAdapter("video", nativeAdapter);
-	registerAdapter("audio", nativeAdapter);
+	// 音视频用 mediaAdapter：多了可播性判定，避免 avi/mkv 黑屏无提示
+	registerAdapter("video", mediaAdapter);
+	registerAdapter("audio", mediaAdapter);
 	registerAdapter("text", textAdapter);
 	registerAdapter("markdown", markdownAdapter());
 	registerAdapter("excel", excelAdapter());
 	registerAdapter("docx", docxAdapter());
+	registerAdapter("pptx", pptxAdapter());
+	registerAdapter("archive", archiveAdapter);
+	registerAdapter("eml", emlAdapter);
 	registerAdapter("html", htmlAdapter());
 	registerAdapter("unsupported", unsupportedAdapter);
 };
@@ -50,6 +65,8 @@ const resolveMime = (input: PreviewInput, options: PreviewOptions, kind: Preview
 };
 
 const emptyRevoke = (): void => {};
+
+const reasonOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 /**
  * 把任意文件载荷转成预览结果。
@@ -84,6 +101,10 @@ export const createPreview = async (
 		mime: finalMime,
 		size,
 		throwOnMissingDependency: options.throwOnMissingDependency ?? false,
+		depth: 0,
+		options,
+		// 递归入口延迟到调用时解析，避免 index ↔ adapter 的静态循环依赖
+		preview: (input2, options2) => createPreview(input2, options2),
 	};
 
 	let output: AdapterOutput;
@@ -94,7 +115,7 @@ export const createPreview = async (
 		return {
 			...base,
 			kind: "unsupported",
-			reason: `解析 ${extOf(name) || kind} 失败: ${err instanceof Error ? err.message : String(err)}`,
+			reason: `解析 ${extOf(name) || kind} 失败: ${reasonOf(err)}`,
 		};
 	}
 
@@ -125,6 +146,32 @@ export const createPreview = async (
 	return result;
 };
 
+/**
+ * 供 archive / eml 递归调用的内部版本，额外带深度守卫。
+ *
+ * 与 createPreview 分开导出，是为了让「递归」这个能力可见但不鼓励：
+ * 普通调用方只该用 createPreview，深度限制只在库内部生效。
+ */
+export const createChildPreview = async (
+	input: PreviewInput,
+	options: PreviewOptions,
+	depth: number
+): Promise<PreviewResult> => {
+	if (depth > MAX_DEPTH) {
+		return {
+			kind: "unsupported",
+			mime: "",
+			name: options.name ?? "",
+			size: 0,
+			reason: `嵌套层数超过 ${MAX_DEPTH} 层，已停止递归解析`,
+			revoke: emptyRevoke,
+		};
+	}
+	return createPreview(input, { ...options, deep: options.deep ?? true });
+};
+
+export { MAX_DEPTH };
+
 export {
 	detectKind,
 	extOf,
@@ -137,8 +184,27 @@ export {
 } from "./core/mime";
 export { registerAdapter } from "./core/adapter";
 export type { Adapter, AdapterContext, AdapterOutput } from "./core/adapter";
-export { decodeText, looksLikeCsv } from "./core/binary";
+export { decodeText, looksLikeCsv, sniffContainer, formatBytes, escapeHtml } from "./core/binary";
+export type { ContainerFormat } from "./core/binary";
+export { canPlayMime, checkPlayability } from "./core/playability";
+// RAR5 的 WASM 后端是可选依赖，浏览器里必须显式喂 wasm；Node 侧会自动找包内路径
+export { configureRar5Wasm, isRar5Available } from "./core/rar5";
+export type { Playability } from "./core/playability";
 export { DOCX_OPTIONS } from "./adapters/docx";
+export { pptxAdapter } from "./adapters/pptx";
+export { archiveAdapter } from "./adapters/archive";
+export { emlAdapter } from "./adapters/eml";
 export { svgAdapter, htmlAdapter } from "./adapters/html";
 export type { HtmlAdapterOptions } from "./adapters/html";
-export type { PreviewInput, PreviewKind, PreviewOptions, PreviewResult } from "./types";
+export type {
+	PreviewInput,
+	PreviewKind,
+	PreviewOptions,
+	PreviewResult,
+	ArchiveEntry,
+	ArchiveEntryKind,
+	MailAddress,
+	MailAttachment,
+	MailSummary,
+	PptxSlide,
+} from "./types";

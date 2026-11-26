@@ -16,5 +16,7 @@ export default defineConfig({
 	target: "es2022",
 	treeshake: true,
 	// 可选 peer 依赖保持 external，由调用方提供
-	external: ["docx-preview", "dompurify", "marked", "xlsx"],
+	// node-unrar-js 也必须是 external：它用相对路径定位包内 wasm，
+	// 一旦被内联进 chunk，__dirname 变成我方 dist 目录，wasm 就找不到了
+	external: ["docx-preview", "dompurify", "marked", "xlsx", "node-unrar-js", /^node-unrar-js\//],
 });

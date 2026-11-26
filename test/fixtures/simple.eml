@@ -1,0 +1,29 @@
+From: =?UTF-8?B?5byg5LiJ?= <zhangsan@example.com>
+To: lisi@example.com, Wang Wu <wangwu@example.com>
+Cc: boss@example.com
+Subject: =?UTF-8?B?5pyI5bqm5oql5ZGKLSDmtYvor5Xku7bku7Y=?=
+Date: Wed, 25 Nov 2026 10:30:00 +0800
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="OUTER"
+
+--OUTER
+Content-Type: multipart/alternative; boundary="INNER"
+
+--INNER
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: base64
+
+5pys5pyI5Lia57up5aaC5LiL77ya6JCl5pS26L6+5oiQ77yM6K+35p+l5pS244CC
+--INNER
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: base64
+
+PGh0bWw+PGJvZHk+PHA+5pys5pyI5Lia57up5aaC5LiL77yaPGI+6JCl5pS26L6+5oiQPC9iPjwvcD48L2JvZHk+PC9odG1sPg==
+--INNER--
+
+--OUTER
+Content-Type: text/plain; charset="utf-8"
+Content-Disposition: attachment; filename="notes.txt"
+
+attachment payload
+--OUTER--

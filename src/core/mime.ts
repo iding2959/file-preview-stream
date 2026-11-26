@@ -70,6 +70,27 @@ const KIND_BY_EXT = new Map<string, PreviewKind>([
 	// tsv 是表格语义：当表格预览比当纯文本有用，调用方要纯文本可自行改注册
 	["tsv", "excel"],
 
+	// pptx：与 docx 同为 OOXML，但渲染路径完全不同（无 docx-preview 等价物）
+	["pptx", "pptx"],
+	["potx", "pptx"],
+	["ppsx", "pptx"],
+	["pptm", "pptx"],
+
+	// 归档：只做目录树与惰性解压，不做「打开即全解」
+	["zip", "archive"],
+	["rar", "archive"],
+	["7z", "archive"],
+	["tar", "archive"],
+	["gz", "archive"],
+	["tgz", "archive"],
+	["bz2", "archive"],
+	["xz", "archive"],
+
+	// 邮件：正文可能是 HTML，附件可递归预览
+	["eml", "eml"],
+	["mht", "eml"],
+	["mhtml", "eml"],
+
 	// markdown
 	["md", "markdown"],
 	["markdown", "markdown"],
@@ -222,6 +243,9 @@ const MIME_BY_KIND: Record<PreviewKind, string> = {
 	audio: "application/octet-stream",
 	docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 	excel: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+	pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+	archive: "application/zip",
+	eml: "message/rfc822",
 	markdown: "text/markdown",
 	html: "text/html",
 	text: "text/plain",
@@ -260,6 +284,21 @@ export const kindFromMime = (mime = ""): PreviewKind | undefined => {
 	if (value.startsWith("audio/")) return "audio";
 	if (value.includes("wordprocessingml.document")) return "docx";
 	if (value.includes("spreadsheetml.sheet")) return "excel";
+	// presentationml 先于通用 ooxml 判断，否则会被当成 docx/excel
+	if (value.includes("presentationml")) return "pptx";
+	if (value === "message/rfc822") return "eml";
+	// 压缩包类：服务器常给 octet-stream，靠扩展名兜底；这里覆盖给了正确 MIME 的情形
+	if (
+		value === "application/zip" ||
+		value === "application/x-zip-compressed" ||
+		value === "application/vnd.rar" ||
+		value === "application/x-rar-compressed" ||
+		value === "application/x-7z-compressed" ||
+		value === "application/x-tar" ||
+		value === "application/gzip"
+	) {
+		return "archive";
+	}
 	if (value === "text/csv") return "excel";
 	if (value === "text/tab-separated-values") return "excel";
 	if (value === "text/markdown") return "markdown";

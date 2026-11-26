@@ -1,6 +1,6 @@
 {
   "name": "file-preview-stream",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Framework-agnostic file preview core: detect type from a Blob/stream and produce renderable output (blob URL, text, HTML skeleton).",
   "keywords": [
     "file-preview",
@@ -130,5 +130,13 @@
     "xlsx": {
       "optional": true
     }
+  },
+  "dependencies": {
+    "fflate": "^0.8.3",
+    "postal-mime": "^4.2.1",
+    "unrar-js": "^0.2.3"
+  },
+  "optionalDependencies": {
+    "node-unrar-js": "^2.0.2"
   }
 }
